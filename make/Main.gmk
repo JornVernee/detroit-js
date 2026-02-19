@@ -32,22 +32,10 @@ all: dist
 TARGETS += all
 
 
-jvmv8: v8
+jvmv8:
 	$(CD) $(TOPDIR)/make && $(MAKE) $(MAKE_ARGS) -f Jvmv8.gmk all
 
 TARGETS += jvmv8
-
-
-get-v8:
-	$(CD) $(TOPDIR)/make && $(MAKE) $(MAKE_ARGS) -f V8.gmk $@
-
-TARGETS += v8 get-v8
-
-
-v8:
-	$(CD) $(TOPDIR)/make && $(MAKE) $(MAKE_ARGS) -f V8.gmk all
-
-TARGETS += v8 get-v8
 
 
 dist: jvmv8
@@ -85,20 +73,5 @@ clean:
 	rm -fr $(BUILD_DIR)
 
 TARGETS += clean
-
-
-####
-#
-# Since v8 takes so (relatively) long to build, and we so rarely change it
-# this convenience target makes it possible to do clean everything in the
-# build dir _except_ v8.
-#
-V8_DIR := $(BUILD_DIR)/$(firstword $(subst /,$(SPACE),$(patsubst $(BUILD_DIR)/%,%,$(V8_BUILD_DIR))))
-ALL_BUT_V8 := $(filter-out $(V8_DIR),$(wildcard $(BUILD_DIR)/*))
-
-clean-all-but-v8:
-	$(RM) -fr $(ALL_BUT_V8)
-
-TARGETS += clean-all-but-v8
 
 .PHONY: $(TARGETS)

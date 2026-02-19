@@ -68,20 +68,6 @@ else
     $(error Unknown HOST_CPU: $(HOST_CPU))
 endif
 
-ifeq ($(TARGET_CPU), x64)
-    V8_TARGET_CPU := x64
-    ifeq ($(TARGET_OS), macos)
-        CLANG_TARGET := x86_64-apple-darwin25.1.0
-    else
-        CLANG_TARGET := x86_64-unknown-linux-gnu
-    endif
-else ifeq ($(TARGET_CPU), aarch64)
-    V8_TARGET_CPU := arm64
-    CLANG_TARGET=aarch64-unknown-linux-gnu
-else
-    $(error "Unsupported target cpu: $(TARGET_CPU)")
-endif
-
 ifneq ($(HOST_OS), $(TARGET_OS))
     $(error "Cross compiling across operating systems not supported")
 endif
@@ -160,39 +146,21 @@ DETROIT_BUILD_VER := $(DATE)$(if $(GIT_REV_SHORT),+$(GIT_REV_SHORT))
 # v8
 #
 
-V8_ROOT_DIR := $(TOPDIR)/v8
-V8_REPO := $(V8_ROOT_DIR)/v8
-V8_CONF_DIR := $(TOPDIR)/conf/v8
-V8_BUILD_DIR := $(BUILD_DIR)/v8/$(V8_TARGET_CPU).release
+ifeq ($(V8),)
+    $(error V8 not set)
+endif
 
-V8_INCLUDE_DIRS := \
-    $(V8_REPO) \
-    $(V8_REPO)/include \
-    $(V8_REPO)/third_party/abseil-cpp \
-    $(V8_REPO)/third_party/fp16/src/include \
-    $(V8_BUILD_DIR)/gen \
-    $(V8_BUILD_DIR)/gen/include \
-    $(V8_REPO)/buildtools/third_party/libc++ \
-    $(V8_REPO)/third_party/libc++/src/include \
-    #
-
-V8_CXX := $(V8_REPO)/third_party/llvm-build/Release+Asserts/bin/clang++
+V8_INCLUDE := $(V8)/include
+V8_LIB := $(V8)/lib
+V8_BIN := $(V8)/bin
+V8_SYSROOT := $(V8)/sysroot
+V8_CXX := $(V8_BIN)/clang++
 V8_DEFINES := \
     -D_LIBCPP_HARDENING_MODE=_LIBCPP_HARDENING_MODE_EXTENSIVE \
     #
 
 # Needed when building v8 debug?
 #V8_DEFINES += -DV8_ENABLE_CHECKS=ENABLED
-
-ifeq ($(TARGET_OS), linux)
-    ifeq ($(V8_TARGET_CPU),x64)
-        V8_SYSROOT=$(V8_REPO)/build/linux/debian_bullseye_amd64-sysroot
-    else ifeq ($(V8_TARGET_CPU),arm64)
-        V8_SYSROOT=$(V8_REPO)/build/linux/debian_bullseye_arm64-sysroot
-    else
-        $(error "Unknown V8_TARGET_CPU: $(V8_TARGET_CPU)")
-    endif
-endif
 
 
 ####

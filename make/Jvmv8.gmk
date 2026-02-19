@@ -67,26 +67,13 @@ CXXFLAGS += $(JAVA_HOME_INCLUDES)
 V8_CXXFLAGS := \
     $(V8_DEFINES) \
     -nostdinc++ \
-    $(addprefix -I,$(V8_INCLUDE_DIRS)) \
+    -I $(V8_INCLUDE) \
     #
 
 CXXFLAGS += $(V8_CXXFLAGS)
 
-V8_MONOLITH_LIB := $(V8_BUILD_DIR)/obj/libv8_monolith.a
-
-V8_MONOLITH_LIB_NINJA := $(V8_BUILD_DIR)/obj/v8_monolith.ninja
-V8_MONOLITH_LIB_RLIB_DEPS_RAW := $(shell $(CAT) $(V8_MONOLITH_LIB_NINJA) | $(AWK) 'BEGIN { FOUND=0 }; /build obj\/libv8_monolith.a:/ { FOUND=1 }; FOUND && /  rlibs =/ { print; FOUND=0 }' | $(SED) 's/.*=[ ]*//')
-
-ifeq ($(V8_MONOLITH_LIB_RLIB_DEPS_RAW),)
-    # No rlibs involved -> no repackaging needed
-    JVMV8_V8_MONOLITH_RLIB :=
-else
-    V8_MONOLITH_LIB_RLIB_DEPS := $(addprefix $(V8_BUILD_DIR)/,$(V8_MONOLITH_LIB_RLIB_DEPS_RAW))
-
-    JVMV8_REPACK_V8_MONOLITH_DIR := $(JVMV8_BUILD_DIR)/v8_monolith_repack
-    JVMV8_V8_MONOLITH_RLIB := $(JVMV8_REPACK_V8_MONOLITH_DIR)/libv8_monolith_rlib.a
-endif
-
+V8_MONOLITH_LIB := $(V8_LIB)/libv8_monolith.a
+V8_MONOLITH_RLIB := $(V8_LIB)/libv8_monolith_rlib.a
 
 ifeq ($(TARGET_OS), macos)
     CXXFLAGS += \
@@ -94,7 +81,7 @@ ifeq ($(TARGET_OS), macos)
         -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk \
         #
 
-    LLVM_AR := $(V8_REPO)/third_party/llvm-build/Release+Asserts/bin/llvm-ar
+    LLVM_AR := $(V8_BIN)/llvm-ar
     AR := $(LLVM_AR)
 
     JVMV8_LINKFLAGS :=
@@ -107,16 +94,14 @@ ifeq ($(TARGET_OS), macos)
     # libc++.a and libc++abi.a end up being "thin" archives on macOS and ld doesn't
     # understand thin archives. Let's link with the corresponding/referenced object
     # files explicitly instead
-    LIBCXX_A := $(V8_BUILD_DIR)/obj/buildtools/third_party/libc++/libc++.a
+    LIBCXX_A := $(V8_LIB)/libc++.a
     LIBCXX_OBJ_FILES := $(shell $(LLVM_AR) t $(LIBCXX_A))
-    LIBCXXABI_A := $(V8_BUILD_DIR)/obj/buildtools/third_party/libc++abi/libc++abi.a
+    LIBCXXABI_A := $(V8_LIB)/libc++abi.a
     LIBCXXABI_OBJ_FILES := $(shell $(LLVM_AR) t $(LIBCXXABI_A))
 
     V8_LINKFLAGS += $(LIBCXX_OBJ_FILES) $(LIBCXXABI_OBJ_FILES)
 
-    V8_MONOLITH_LIB := $(V8_BUILD_DIR)/obj/libv8_monolith.a
-
-    V8_LINKFLAGS += $(V8_MONOLITH_LIB) $(JVMV8_V8_MONOLITH_RLIB)
+    V8_LINKFLAGS += $(V8_MONOLITH_LIB) $(V8_MONOLITH_RLIB)
 
     JVMV8_LINKFLAGS += $(V8_LINKFLAGS)
 
@@ -141,17 +126,17 @@ else ifeq ($(TARGET_OS), linux)
     # Set up v8 linking
     V8_LINKFLAGS :=
 
-    V8_LINKFLAGS += $(V8_BUILD_DIR)/obj/buildtools/third_party/libc++/libc++.a
-    V8_LINKFLAGS += $(V8_BUILD_DIR)/obj/buildtools/third_party/libc++abi/libc++abi.a
+    V8_LINKFLAGS += $(V8_LIB)/libc++.a
+    V8_LINKFLAGS += $(V8_LIB)/libc++abi.a
 
-    V8_LINKFLAGS += -Wl,--whole-archive $(V8_MONOLITH_LIB) -Wl,--no-whole-archive $(JVMV8_V8_MONOLITH_RLIB)
+    V8_LINKFLAGS += -Wl,--whole-archive $(V8_MONOLITH_LIB) -Wl,--no-whole-archive $(V8_MONOLITH_RLIB)
 
     # This is more important than it might seem: without it, v8 crashes in
     # mysterious ways, presumably because the wrong symbols/implementations
     # are being picked up and used.
     V8_LINKFLAGS += -Wl,--version-script=$(TOPDIR)/make/version-script.txt
 
-    V8_LINKFLAGS += $(V8_REPO)/third_party/llvm-build/Release+Asserts/lib/clang/22/lib/$(CLANG_TARGET)/libclang_rt.builtins.a
+    V8_LINKFLAGS += $(V8_LIB)/libclang_rt.builtins.a
 
     JVMV8_LINKFLAGS += $(V8_LINKFLAGS)
 else
@@ -208,22 +193,7 @@ $(JVMV8_JAR): $(JVMV8_JAR_MANIFEST_FILE_WITH_VERSION) $(JVMV8_JAVA_CLASSES_MARKE
 
 ALL_TARGETS += $(JVMV8_JAR)
 
-ifneq ($(JVMV8_V8_MONOLITH_RLIB), )
-$(JVMV8_V8_MONOLITH_RLIB): $(V8_MONOLITH_LIB_RLIB_DEPS)
-	@$(MKDIR) -p $(@D)
-	$(RM) -rf $(JVMV8_REPACK_V8_MONOLITH_DIR)/obj
-	@$(MKDIR) -p $(JVMV8_REPACK_V8_MONOLITH_DIR)/obj
-	($(CD) $(JVMV8_REPACK_V8_MONOLITH_DIR)/obj && \
-	    for rlib in $(V8_MONOLITH_LIB_RLIB_DEPS); do \
-	        $(MKDIR) -p $$(basename $$rlib); \
-		($(CD) $$(basename $$rlib) && $(AR) x $$rlib); \
-	    done \
-	)
-	($(CD) $(JVMV8_REPACK_V8_MONOLITH_DIR)/obj && $(AR) -r -c -D $@.tmp $$($(FIND) . -name "*.o"))
-	$(MV) $@.tmp $@
-endif
-
-$(JVMV8_LIB): $(JVMV8_GEN_INCLUDE_DIR)/org_openjdk_engine_javascript_internal_V8.h $(JVMV8_NATIVE_ALL_FILES) $(V8_MONOLITH_LIB) $(JVMV8_V8_MONOLITH_RLIB)
+$(JVMV8_LIB): $(JVMV8_GEN_INCLUDE_DIR)/org_openjdk_engine_javascript_V8.h $(JVMV8_NATIVE_ALL_FILES) $(V8_MONOLITH_LIB) $(V8_MONOLITH_RLIB)
 	$(MKDIR) -p $(@D)
 	$(V8_CXX) -I$(JVMV8_GEN_INCLUDE_DIR) $(CXXFLAGS) $(JVMV8_NATIVE_SRC_FILES) $(JVMV8_LINKFLAGS) -o $@.tmp
 ifeq ($(TARGET_OS), macos)
