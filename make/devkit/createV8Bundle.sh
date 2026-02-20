@@ -195,6 +195,6 @@ cp $SCRIPT_DIR/$SCRIPT_FILE $IMAGE_DIR
 cp -a $V8_CONF_DIR $IMAGE_DIR
 
 # Create bundle
-#echo "Creating $OUTPUT_DIR/$BUNDLE_NAME"
-#cd $IMAGE_DIR
-#tar zcf $OUTPUT_DIR/$BUNDLE_NAME *
+echo "Creating $OUTPUT_DIR/$BUNDLE_NAME"
+cd $IMAGE_DIR
+tar zcf $OUTPUT_DIR/$BUNDLE_NAME *
