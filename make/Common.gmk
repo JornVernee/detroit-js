@@ -127,8 +127,6 @@ NATIVE_DIR := $(BUILD_DIR)/native
 # Version information
 #
 
-include $(TOPDIR)/conf/v8/version.conf
-
 ifneq ($(wildcard $(TOPDIR)/.git),)
   GIT_REV_ONLY := $(shell $(CD) $(TOPDIR) && $(GIT) rev-parse HEAD)
   GIT_REV_SUFFIX := $(if $(shell $(CD) $(TOPDIR) && $(GIT) status --porcelain),+)
