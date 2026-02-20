@@ -29,25 +29,17 @@ set -e
 
 V8_REVISION=14.4.221
 
-BUNDLE_NAME=v8-static-$V8_REVISION.tar.gz
-
 SCRIPT_DIR="$(cd "$(dirname $0)" > /dev/null && pwd)"
 SCRIPT_FILE="$(basename $0)"
 OUTPUT_DIR="${SCRIPT_DIR}/../../build/v8"
 SRC_DIR="$OUTPUT_DIR/src"
-BUILD_DIR="$OUTPUT_DIR/build"
-DOWNLOAD_DIR="$OUTPUT_DIR/download"
-INSTALL_DIR="$OUTPUT_DIR/install"
-IMAGE_DIR="$OUTPUT_DIR/image"
 V8_CONF_DIR="${SCRIPT_DIR}/v8-conf"
-
 V8_REPO="$SRC_DIR/v8"
 
-OS_NAME=$(uname -s)
-OS_ARCH=$(arch)
-NUM_CORES=$(nproc --all)
+HOST_OS=$(uname -s)
+HOST_CPU=$(arch)
 
-USAGE="$0 <depot tools dir>"
+USAGE="$0 <depot tools dir> [<target cpu>]"
 
 if [ "$1" = "" ]; then
     echo $USAGE
@@ -59,31 +51,55 @@ FETCH="${DEPOT_TOOLS}/fetch"
 GCLIENT="${DEPOT_TOOLS}/gclient"
 GN="${DEPOT_TOOLS}/gn"
 
-case $OS_ARCH in
+if [[ ! -z "$2" ]]; then
+  TARGET_CPU=$2
+else
+  TARGET_CPU=$HOST_CPU
+fi
+
+echo "HOST_OS=$HOST_OS"
+echo "TARGET_CPU=$TARGET_CPU"
+
+case $TARGET_CPU in
   aarch64)
     V8_TARGET_CPU=arm64
-    CLANG_TARGET=aarch64-unknown-linux-gnu
+    case $HOST_OS in
+      Linux)
+        CLANG_TARGET=aarch64-unknown-linux-gnu
+        SYSROOT_DIR=$V8_REPO/build/linux/debian_bullseye_arm64-sysroot
+        ;;
+      *)
+        echo " Unsupported OS: $HOST_OS"
+        exit 1
+        ;;
+    esac
     ;;
   x86_64)
     V8_TARGET_CPU=x64
-    case $OS_NAME in
+    case $HOST_OS in
       Linux)
         CLANG_TARGET=x86_64-unknown-linux-gnu
+        SYSROOT_DIR=$V8_REPO/build/linux/debian_bullseye_amd64-sysroot
         ;;
       Darwin)
         CLANG_TARGET=x86_64-apple-darwin25.1.0
+        SYSROOT_DIR=
         ;;
       *)
-        echo " Unsupported OS: $OS_NAME"
+        echo " Unsupported OS: $HOST_OS"
         exit 1
         ;;
     esac
     ;;
   *)
-    echo " Unsupported arch: $OS_ARCH"
+    echo " Unsupported arch: $TARGET_CPU"
     exit 1
     ;;
 esac
+
+BUILD_DIR="$OUTPUT_DIR/build/$HOST_OS-$TARGET_CPU"
+IMAGE_DIR="$OUTPUT_DIR/image/$HOST_OS-$TARGET_CPU"
+BUNDLE_NAME=v8-static-$V8_REVISION-$HOST_OS-$TARGET_CPU.tar.gz
 
 V8_CONF_FILE=${V8_CONF_DIR}/${V8_TARGET_CPU}.args.gn
 
@@ -92,7 +108,7 @@ if [ ! -e "$SRC_DIR" ]; then
   mkdir -p "$SRC_DIR"
   cd "$SRC_DIR" && $FETCH v8
   cd $V8_REPO && $GCLIENT sync -r $V8_REVISION
-  if [ "$OS_NAME" = "Linux" ]; then
+  if [ "$HOST_OS" = "Linux" ]; then
     # Always install the arm64 sysroot to ensure it's there for cross compilation
     cd $V8_REPO && build/linux/sysroot_scripts/install-sysroot.py --arch=arm64
   fi
@@ -185,12 +201,14 @@ cp $V8_REPO/third_party/llvm-build/Release+Asserts/bin/lld-link $IMAGE_DIR/bin/
 
 echo "Copying lib/clang/*/include to image"
 mkdir -p $IMAGE_DIR/lib/clang/22/include
-cp -a $V8_REPO/third_party/llvm-build/Release+Asserts//lib/clang/22/include/. \
+cp -a $V8_REPO/third_party/llvm-build/Release+Asserts/lib/clang/22/include/. \
     $IMAGE_DIR/lib/clang/22/include/
 
-echo "Copying sysroot"
-mkdir -p $IMAGE_DIR/bin
-cp -a $V8_REPO/build/linux/debian_bullseye_amd64-sysroot $IMAGE_DIR/sysroot/
+if [[ ! -z "$SYSROOT_DIR" ]]; then
+  echo "Copying sysroot"
+  mkdir -p $IMAGE_DIR/bin
+  cp -a $SYSROOT_DIR $IMAGE_DIR/sysroot/
+fi
 
 # Copy this script to image
 echo "Copying this script to image"
