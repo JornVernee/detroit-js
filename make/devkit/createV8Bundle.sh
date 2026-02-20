@@ -111,7 +111,7 @@ V8_REPACK_V8_MONOLITH_DIR=$BUILD_DIR/v8_monolith_repack
 V8_MONOLITH_RLIB=$V8_REPACK_V8_MONOLITH_DIR/libv8_monolith_rlib.a
 
 if [ ! -e "$V8_MONOLITH_RLIB" ]; then
-  echo "Repackage rust libraries"
+  echo "Repackaging rust libraries"
   V8_MONOLITH_LIB_NINJA=$BUILD_DIR/obj/v8_monolith.ninja
   V8_MONOLITH_LIB_RLIB_DEPS=$(cat $V8_MONOLITH_LIB_NINJA | awk 'BEGIN { FOUND=0 }; /build obj\/libv8_monolith.a:/ { FOUND=1 }; FOUND && /  rlibs =/ { print; FOUND=0 }' | sed 's/.*=[ ]*//')
 
@@ -130,36 +130,47 @@ if [ ! -e "$V8_MONOLITH_RLIB" ]; then
   fi
 fi
 
+# repack these thin archives (index + links to local .o objects) into real archives
+REPACK_CPP_LIBS_DIR=$BUILD_DIR/cpplib_repack
+REPACK_CPP_LIB=$REPACK_CPP_LIBS_DIR/libc++.a
+REPACK_CPP_ABI_LIB=$REPACK_CPP_LIBS_DIR/libc++abi.a
+
+if [ ! -e "$REPACK_CPP_LIB" ]; then
+  echo "Repackaging libc++.a"
+  mkdir -p $REPACK_CPP_LIBS_DIR
+  cd $REPACK_CPP_LIBS_DIR && ar -t $BUILD_DIR/obj/buildtools/third_party/libc++/libc++.a | xargs ar -r -c -D $REPACK_CPP_LIB.tmp
+  mv $REPACK_CPP_LIB.tmp $REPACK_CPP_LIB
+fi
+
+if [ ! -e "$REPACK_CPP_ABI_LIB" ]; then
+  echo "Repackaging libc++abi.a"
+  mkdir -p $REPACK_CPP_LIBS_DIR
+  cd $REPACK_CPP_LIBS_DIR && ar -t $BUILD_DIR/obj/buildtools/third_party/libc++abi/libc++abi.a | xargs ar -r -c -D $REPACK_CPP_ABI_LIB.tmp
+  mv $REPACK_CPP_ABI_LIB.tmp $REPACK_CPP_ABI_LIB
+fi
+
 mkdir -p $IMAGE_DIR
 # Extract what we need into an image
 echo "Copying v8 libs to image"
 mkdir -p "$IMAGE_DIR/lib"
 cp -a $BUILD_DIR/obj/libv8_monolith.a $IMAGE_DIR/lib/
-cp -a $BUILD_DIR/obj/buildtools/third_party/libc++/libc++.a $IMAGE_DIR/lib/
-mkdir -p "$IMAGE_DIR/lib/libc++"
-cp -a $BUILD_DIR/obj/buildtools/third_party/libc++/libc++/*.o $IMAGE_DIR/lib/libc++
-cp -a $BUILD_DIR/obj/buildtools/third_party/libc++abi/libc++abi.a $IMAGE_DIR/lib/
-mkdir -p "$IMAGE_DIR/lib/libc++abi"
-cp -a $BUILD_DIR/obj/buildtools/third_party/libc++abi/libc++abi/*.o $IMAGE_DIR/lib/libc++abi
+cp -a $REPACK_CPP_LIB $IMAGE_DIR/lib/
+cp -a $REPACK_CPP_ABI_LIB $IMAGE_DIR/lib/
 cp -a $V8_REPO/third_party/llvm-build/Release+Asserts/lib/clang/22/lib/${CLANG_TARGET}/libclang_rt.builtins.a $IMAGE_DIR/lib/
 if [[ ! -z "$V8_MONOLITH_RLIB" ]]; then
   cp -a $V8_MONOLITH_RLIB $IMAGE_DIR/lib/
 fi
 
 echo "Copying includes to image"
+# V8 headers
 mkdir -p $IMAGE_DIR/include
-cp -a $V8_REPO/include/v8*.h $IMAGE_DIR/include/
+cp -r -a $V8_REPO/include/v8*.h $IMAGE_DIR/include/
+mkdir -p $IMAGE_DIR/include/inspector
+cp -a $BUILD_DIR/gen/include/inspector/*.h $IMAGE_DIR/include/inspector
+# libc++ headers
 cp -a $V8_REPO/third_party/libc++/src/include/* $IMAGE_DIR/include/
 cp -a $V8_REPO/buildtools/third_party/libc++/__config_site $IMAGE_DIR/include/
 cp -a $V8_REPO/buildtools/third_party/libc++/__assertion_handler $IMAGE_DIR/include/
-mkdir -p $IMAGE_DIR/include/cppgc
-cp -r $V8_REPO/include/cppgc/*.h $IMAGE_DIR/include/cppgc
-mkdir -p $IMAGE_DIR/include/cppgc/internal
-cp -a $V8_REPO/include/cppgc/internal/*.h $IMAGE_DIR/include/cppgc/internal
-mkdir -p $IMAGE_DIR/include/libplatform
-cp -a $V8_REPO/include/libplatform/*.h $IMAGE_DIR/include/libplatform
-mkdir -p $IMAGE_DIR/include/inspector
-cp -a $BUILD_DIR/gen/include/inspector/*.h $IMAGE_DIR/include/inspector
 
 echo "Copying toolchain to image"
 mkdir -p $IMAGE_DIR/bin
@@ -184,6 +195,6 @@ cp $SCRIPT_DIR/$SCRIPT_FILE $IMAGE_DIR
 cp -a $V8_CONF_DIR $IMAGE_DIR
 
 # Create bundle
-echo "Creating $OUTPUT_DIR/$BUNDLE_NAME"
-cd $IMAGE_DIR
-tar zcf $OUTPUT_DIR/$BUNDLE_NAME *
+#echo "Creating $OUTPUT_DIR/$BUNDLE_NAME"
+#cd $IMAGE_DIR
+#tar zcf $OUTPUT_DIR/$BUNDLE_NAME *

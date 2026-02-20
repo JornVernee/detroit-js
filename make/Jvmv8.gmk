@@ -81,9 +81,6 @@ ifeq ($(TARGET_OS), macos)
         -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk \
         #
 
-    LLVM_AR := $(V8_BIN)/llvm-ar
-    AR := $(LLVM_AR)
-
     JVMV8_LINKFLAGS :=
 
     # Set up link path (find the other dependency libraries next to the jvmv8 library)
@@ -91,15 +88,7 @@ ifeq ($(TARGET_OS), macos)
 
     V8_LINKFLAGS :=
 
-    # libc++.a and libc++abi.a end up being "thin" archives on macOS and ld doesn't
-    # understand thin archives. Let's link with the corresponding/referenced object
-    # files explicitly instead
-    LIBCXX_A := $(V8_LIB)/libc++.a
-    LIBCXX_OBJ_FILES := $(shell $(LLVM_AR) t $(LIBCXX_A))
-    LIBCXXABI_A := $(V8_LIB)/libc++abi.a
-    LIBCXXABI_OBJ_FILES := $(shell $(LLVM_AR) t $(LIBCXXABI_A))
-
-    V8_LINKFLAGS += $(LIBCXX_OBJ_FILES) $(LIBCXXABI_OBJ_FILES)
+    V8_LINKFLAGS += $(V8_LIB)/libc++.a $(V8_LIB)/libc++abi.a
 
     V8_LINKFLAGS += $(V8_MONOLITH_LIB) $(V8_MONOLITH_RLIB)
 
