@@ -147,7 +147,11 @@ DETROIT_BUILD_VER := $(DATE)$(if $(GIT_REV_SHORT),+$(GIT_REV_SHORT))
 #
 
 ifeq ($(V8),)
-    $(error V8 not set)
+  ifneq (,$(wildcard $(TOPDIR)/build/v8/image))
+    V8 := $(TOPDIR)/build/v8/image
+  else
+    $(error V8 no set)
+  endif
 endif
 
 V8_INCLUDE := $(V8)/include
