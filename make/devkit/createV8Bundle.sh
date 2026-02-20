@@ -135,19 +135,22 @@ REPACK_CPP_LIBS_DIR=$BUILD_DIR/cpplib_repack
 REPACK_CPP_LIB=$REPACK_CPP_LIBS_DIR/libc++.a
 REPACK_CPP_ABI_LIB=$REPACK_CPP_LIBS_DIR/libc++abi.a
 
-if [ ! -e "$REPACK_CPP_LIB" ]; then
-  echo "Repackaging libc++.a"
-  mkdir -p $REPACK_CPP_LIBS_DIR
-  cd $REPACK_CPP_LIBS_DIR && ar -t $BUILD_DIR/obj/buildtools/third_party/libc++/libc++.a | xargs ar -r -c -D $REPACK_CPP_LIB.tmp
-  mv $REPACK_CPP_LIB.tmp $REPACK_CPP_LIB
-fi
+# $1 is repack dir
+# $2 is source archive
+function repack_thin_archive() {
+  local LIB_NAME=$(basename $2)
+  local TARGET=$1/$LIB_NAME
+  if [ ! -e "$TARGET" ]; then
+    echo "Repackaging $LIB_NAME"
+    mkdir -p $1
+    local OBJECTS=$(ar -t $2)
+    ar -r -c -D $TARGET.tmp $OBJECTS
+    mv $TARGET.tmp $TARGET
+  fi
+}
 
-if [ ! -e "$REPACK_CPP_ABI_LIB" ]; then
-  echo "Repackaging libc++abi.a"
-  mkdir -p $REPACK_CPP_LIBS_DIR
-  cd $REPACK_CPP_LIBS_DIR && ar -t $BUILD_DIR/obj/buildtools/third_party/libc++abi/libc++abi.a | xargs ar -r -c -D $REPACK_CPP_ABI_LIB.tmp
-  mv $REPACK_CPP_ABI_LIB.tmp $REPACK_CPP_ABI_LIB
-fi
+repack_thin_archive $REPACK_CPP_LIBS_DIR $BUILD_DIR/obj/buildtools/third_party/libc++/libc++.a
+repack_thin_archive $REPACK_CPP_LIBS_DIR $BUILD_DIR/obj/buildtools/third_party/libc++abi/libc++abi.a
 
 mkdir -p $IMAGE_DIR
 # Extract what we need into an image
