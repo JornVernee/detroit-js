@@ -183,7 +183,13 @@ fi
 echo "Copying includes to image"
 # V8 headers
 mkdir -p $IMAGE_DIR/include
-cp -r -a $V8_REPO/include/v8*.h $IMAGE_DIR/include/
+cp -a $V8_REPO/include/*.h $IMAGE_DIR/include/
+mkdir -p $IMAGE_DIR/include/cppgc
+cp -a $V8_REPO/include/cppgc/*.h $IMAGE_DIR/include/cppgc/
+mkdir -p $IMAGE_DIR/include/cppgc/internal
+cp -a $V8_REPO/include/cppgc/internal/*.h $IMAGE_DIR/include/cppgc/internal/
+mkdir -p $IMAGE_DIR/include/libplatform
+cp -a $V8_REPO/include/libplatform/*.h $IMAGE_DIR/include/libplatform/
 mkdir -p $IMAGE_DIR/include/inspector
 cp -a $BUILD_DIR/gen/include/inspector/*.h $IMAGE_DIR/include/inspector
 # libc++ headers
